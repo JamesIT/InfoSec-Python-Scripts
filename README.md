@@ -1,4 +1,4 @@
-# InfoSec-Python-Scripts
-Python Scripts
+# InfoSec-Scripts
+Scripts
 
-Scripts written by me in Python.
+Scripts written by me.
