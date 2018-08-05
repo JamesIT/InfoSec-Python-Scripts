@@ -6,6 +6,22 @@
 AUDITDIR="/tmp/$(hostname -s)_audit"
 TIME="$(date +%F_%T)"
 
+# NTP Servers
+ntp_nameserver1='0.pool.ntp.org'
+ntp_nameserver2='1.pool.ntp.org'
+ntp_nameserver3='2.pool.ntp.org'
+ntp_nameserver4='3.pool.ntp.org'
+
+# Configuration File Locations
+auditd_conf='/etc/audit/auditd.conf'
+sshd_config='/etc/ssh/sshd_config'
+grub_cfg='/boot/grub2/grub.cfg'
+pwqual='/etc/security/pwquality.conf'
+pam_su='/etc/pam.d/su'
+
+# Custom Options
+
+
 mkdir -p $AUDITDIR
 
 # CIS 1.2.1
@@ -63,7 +79,7 @@ yum -y remove rsh-server rsh ypserv ypbind tftp tftp-server talk talk-server tel
 
 # CIS 2.2.6, 1.5.4 + Custom Configuration
 echo "Removing un-neccessary services..."
-yum -y remove bind vsftpd dovecot samba squid net-snmp openldap-servers openldap-clients xorg-x11* prelink >> $AUDITDIR/service_remove_$TIME.log
+yum -y remove bind vsftpd dovecot samba squid net-snmp openldap-servers openldap-clients xorg-x11* prelink httpd >> $AUDITDIR/service_remove_$TIME.log
 
 # CIS 2.2.3, CIS 2.2.4, CIS 2.2.5, CIS 2.2.6, CIS 2.2.21
 echo "Disabling Unnecessary Services..."
@@ -132,7 +148,6 @@ chown root:root /var/log/user /var/log/kern.log /var/log/daemon.log /var/log/sys
 
 # CIS 4.2.1.4 - 4.2.1.5  Configure rsyslog to Send Log to a Remote Log Host - This is environment specific
 echo "Configuring Audit Log Storage Size..."
-auditd_conf='/etc/audit/auditd.conf'
 cp -a ${auditd_conf} ${auditd_conf}.bak
 
 # CIS 4.1.1.1 Configure Audit Log Storage Size
@@ -308,7 +323,6 @@ EOF
 
 echo "Configuring SSH..."
 cp /etc/ssh/sshd_config $AUDITDIR/sshd_config_$TIME.bak
-sshd_config='/etc/ssh/sshd_config'
 chown root:root ${sshd_config}						# CIS 5.2.1
 chmod 600 ${sshd_config}						# CIS 5.2.1
 sed -i "s/\#Protocol/Protocol/" ${sshd_config}				# CIS 5.2.2
@@ -334,7 +348,6 @@ systemctl restart sshd >> $AUDITDIR/service_restart_$TIME.log
 
 # CIS 5.3.1
 echo "Setting Password Policy..."
-pwqual='/etc/security/pwquality.conf'
 sed -i 's/^# minlen =.*$/minlen = 12/' ${pwqual}
 sed -i 's/^# dcredit =.*$/dcredit = -1/' ${pwqual}
 sed -i 's/^# ucredit =.*$/ucredit = -1/' ${pwqual}
@@ -403,7 +416,6 @@ EOF
 # CIS 4.1.3, 1.6.1.1
 echo "Enabling auditd GRUB startup..."
 sed -i s/'^GRUB_CMDLINE_LINUX="'/'GRUB_CMDLINE_LINUX="audit=1 selinux=1 enforcing=1 '/ /etc/default/grub 
-grub_cfg='/boot/grub2/grub.cfg'
 grub2-mkconfig -o ${grub_cfg}
 
 echo "Verifying System File Permissions..."			
@@ -765,10 +777,13 @@ echo "If not configured.. enable password protection..."
 # CIS 5.6
 echo "Restricting Access to the su Command..."
 cp /etc/pam.d/su $AUDITDIR/su_$TIME.bak
-pam_su='/etc/pam.d/su'
 line_num="$(grep -n "^\#auth[[:space:]]*required[[:space:]]*pam_wheel.so[[:space:]]*use_uid" ${pam_su} | cut -d: -f1)"
 sed -i "${line_num} a auth		required	pam_wheel.so use_uid" ${pam_su}
 usermod -G wheel root
+
+# Set bootloader password - User Interaction Required.
+# CIS 1.5.3
+grub2-setpassword
 
 echo ""
 echo "Successfully Completed"
