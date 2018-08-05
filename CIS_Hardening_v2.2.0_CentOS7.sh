@@ -380,17 +380,17 @@ auth [default=die] pam_faillock.so authfail audit deny=5 unlock_time=1800
 auth sufficient pam_faillock.so authsucc audit deny=5 unlock_time=1800
 auth required pam_deny.so\n$content" > /etc/pam.d/system-auth
 
-# CIS 5.3.3
-echo "Preventing password re-use..."
-line_num="$(grep -n "^password[[:space:]]*sufficient[[:space:]]*pam_unix.so*" /etc/pam.d/system-auth | cut -d: -f1)"
-sed -n "$line_num p" system-auth | grep remember || sed "${line_num} s/$/ remember=5/" /etc/pam.d/system-auth
-
 echo "Setting password expiration..."
 login_defs=/etc/login.defs
 sed -i 's/^PASS_MAX_DAYS.*$/PASS_MAX_DAYS 0/' ${login_defs} # CIS 5.4.1.1 - Custom per NCSC guidelines.
 sed -i 's/^PASS_MIN_DAYS.*$/PASS_MIN_DAYS 7/' ${login_defs} # CIS 5.4.1.2
 sed -i 's/^PASS_MIN_LEN.*$/PASS_MIN_LEN 12/' ${login_defs} # Custom per NCSC guidelines.
 sed -i 's/^PASS_WARN_AGE.*$/PASS_WARN_AGE 7/' ${login_defs} # CIS 5.4.1.3
+
+# CIS 5.3.3
+echo "Preventing password re-use..."
+line_num="$(grep -n "^password[[:space:]]*sufficient[[:space:]]*pam_unix.so*" /etc/pam.d/system-auth | cut -d: -f1)"
+sed -n "$line_num p" system-auth | grep remember || sed "${line_num} s/$/ remember=5/" /etc/pam.d/system-auth
 
 # CIS 5.5
 echo "Securing TTY..."
@@ -426,20 +426,16 @@ grub2-mkconfig -o ${grub_cfg}
 
 echo "Verifying System File Permissions..."			
 chmod og-rwx /boot/grub2/grub.cfg # CIS 1.4.1
-chmod og-rwx /boot/grub2/user.cfg # CIS 1.4.1
 chmod 600 /etc/rsyslog.conf
 chmod 644 /etc/passwd # CIS 6.1.2
 chmod 000 /etc/shadow # CIS 6.1.3
 chmod 000 /etc/gshadow # CIS 6.1.5
 chmod 644 /etc/group  # CIS 6.1.4
 chown root:root /boot/grub2/grub.cfg	# CIS 1.4.1
-chown root:root /boot/grub2/user.cfg	# CIS 1.4.1
 chown root:root /etc/passwd # CIS 6.1.2
 chown root:root /etc/shadow # CIS 6.1.3
 chown root:root /etc/gshadow # CIS 6.1.5
 chown root:root /etc/group  # CIS 6.1.4
-
-chwon 
 
 # CIS 1.1.21 
 echo "Setting Sticky Bit on All World-Writable Directories..."
@@ -797,6 +793,9 @@ echo "Please enter GRUB2 Bootloader Configuration Password..."
 echo "** NOTE **: Do NOT Lose this or you cannot modify GRUB configuration."
 grub2-setpassword
 grub2-mkconfig -o /boot/grub2/grub.cfg
+# Moved further down script, as file is not created until setpassword.
+chmod og-rwx /boot/grub2/user.cfg # CIS 1.4.1
+chown root:root /boot/grub2/user.cfg	# CIS 1.4.1
 
 echo ""
 echo "Successfully Completed"
