@@ -1,5 +1,5 @@
 #!/bin/bash
-# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.2).
+# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.3).
 # Copyright (c) 2015, Ross Hamilton. All rights reserved.
 # Licenced under the BSD Licence See LICENCE file for details
 
