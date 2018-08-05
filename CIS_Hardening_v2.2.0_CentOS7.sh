@@ -1,16 +1,10 @@
 #!/bin/bash
-# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.2).
+# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.3).
 # Copyright (c) 2015, Ross Hamilton. All rights reserved.
 # Licenced under the BSD Licence See LICENCE file for details
 
 AUDITDIR="/tmp/$(hostname -s)_audit"
 TIME="$(date +%F_%T)"
-
-# NTP Servers
-ntp_nameserver1='0.pool.ntp.org'
-ntp_nameserver2='1.pool.ntp.org'
-ntp_nameserver3='2.pool.ntp.org'
-ntp_nameserver4='3.pool.ntp.org'
 
 # Configuration File Locations
 auditd_conf='/etc/audit/auditd.conf'
