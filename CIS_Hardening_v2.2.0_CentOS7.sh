@@ -174,8 +174,87 @@ systemctl enable auditd
 # CIS 4.1.4 - 4.1.18
 echo "Setting audit rules..."
 cat > /etc/audit/audit.rules << "EOF"
+
+# Remove any existing rules
 -D
+
+# Increase kernel buffer size
 -b 8192
+
+# Failure of auditd causes a kernel panic
+-f 2
+
+# Watch syslog configuration
+-w /etc/syslog.conf
+
+# Watch PAM and authentication configuration
+-w /etc/pam.d/
+-w /etc/nsswitch.conf
+
+# Watch system log files
+-w /var/log/messages
+-w /var/log/audit/audit.log
+-w /var/log/audit/audit[1-4].log
+
+# Watch audit configuration files
+-w /etc/audit/auditd.conf -p wa
+-w /etc/audit/audit.rules -p wa
+
+# Watch login configuration
+-w /etc/login.defs
+-w /etc/securetty
+-w /etc/resolv.conf
+
+# Watch cron and at
+-w /etc/at.allow
+-w /etc/at.deny
+-w /var/spool/at/
+-w /etc/crontab
+-w /etc/anacrontab
+-w /etc/cron.allow
+-w /etc/cron.deny
+-w /etc/cron.d/
+-w /etc/cron.hourly/
+-w /etc/cron.weekly/
+-w /etc/cron.monthly/
+
+# Watch shell configuration
+-w /etc/profile.d/
+-w /etc/profile
+-w /etc/shells
+-w /etc/bashrc
+-w /etc/csh.cshrc
+-w /etc/csh.login
+
+# Watch kernel configuration
+-w /etc/sysctl.conf
+-w /etc/modprobe.conf
+
+# Watch linked libraries
+-w /etc/ld.so.conf -p wa
+-w /etc/ld.so.conf.d/ -p wa
+
+# Watch init configuration
+-w /etc/rc.d/init.d/
+-w /etc/sysconfig/
+-w /etc/inittab -p wa
+-w /etc/rc.local
+-w /etc/rc.sysinit
+
+# Watch filesystem and NFS exports
+-w /etc/fstab
+-w /etc/exports
+
+# Watch xinetd configuration
+-w /etc/xinetd.conf
+-w /etc/xinetd.d/
+
+# Watch TCP_WRAPPERS configuration
+-w /etc/hosts.allow
+-w /etc/hosts.deny
+
+# Watch sshd configuration
+-w /etc/ssh/sshd_config
 
 -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change
 -a always,exit -F arch=b32 -S adjtimex -S settimeofday -S stime -k time-change
@@ -261,6 +340,7 @@ cat > /etc/audit/audit.rules << "EOF"
 -a always,exit -F path=/usr/libexec/utempter/utempter -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
 -a always,exit -F path=/usr/libexec/openssh/ssh-keysign -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
 
+# Make the auditd Configuration Immutable
 -e 2
 EOF
 
