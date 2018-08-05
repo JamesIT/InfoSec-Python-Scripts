@@ -1,5 +1,5 @@
 #!/bin/bash
-# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.3).
+# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.4).
 # Copyright (c) 2015, Ross Hamilton. All rights reserved.
 # Licenced under the BSD Licence See LICENCE file for details
 
@@ -12,8 +12,16 @@ sshd_config='/etc/ssh/sshd_config'
 grub_cfg='/boot/grub2/grub.cfg'
 pwqual='/etc/security/pwquality.conf'
 pam_su='/etc/pam.d/su'
-
+# Create Audit Directory
 mkdir -p $AUDITDIR
+
+echo ""
+echo ""
+echo "CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition)."
+echo "Updated/Modified by James Hemmings (Local Script Version V1.4)."
+read -n 1 -s -r -p "Press any key to continue"
+echo ""
+echo ""
 
 # CIS 1.2.1
 echo "Listing package update repo's..."
@@ -56,10 +64,6 @@ install appletalk /bin/true
 blacklist firewire-core
 EOF
 
-# CIS 1.1.22
-echo "Disabling auto-mount filesystems..."
-systemctl disable autofs
-
 # Custom hardening configuration, none-cis.
 echo "Removing GCC compiler..."
 yum -y remove gcc*
@@ -72,9 +76,9 @@ yum -y remove rsh-server rsh ypserv ypbind tftp tftp-server talk talk-server tel
 echo "Removing un-neccessary services..."
 yum -y remove bind vsftpd dovecot samba squid net-snmp openldap-servers openldap-clients xorg-x11* prelink httpd >> $AUDITDIR/service_remove_$TIME.log
 
-# CIS 2.2.3, CIS 2.2.4, CIS 2.2.5, CIS 2.2.6, CIS 2.2.21
+# CIS 2.2.3, CIS 2.2.4, CIS 2.2.5, CIS 2.2.6, CIS 2.2.21, CIS 1.1.22
 echo "Disabling Unnecessary Services..."
-servicelist=(dhcpd avahi-daemon cups nfslock rpcgssd rpcbind rpcidmapd rpcsvcgssd slapd rsyncd)
+servicelist=(dhcpd avahi-daemon cups nfslock rpcgssd rpcbind rpcidmapd rpcsvcgssd slapd rsyncd autofs)
 for i in ${servicelist[@]}; do
   [ $(systemctl disable $i 2> /dev/null) ] || echo "$i is Disabled"
 done
@@ -99,12 +103,23 @@ chkconfig time-stream off >> $AUDITDIR/time_disable_status_$TIME.log
 echo "Installing NTP..."
 yum -y install ntp >> $AUDITDIR/service_install_$TIME.log
 
-echo "Setting GMT Timezone..."
-timedatectl set-timezone Europe/London
-
 # 3.6.1 
 echo "Installing iptables..." 
 yum -y install iptables >> $AUDITDIR/service_install_$TIME.log		
+
+# CIS 1.3.1
+echo "Installing AIDE..."
+yum -y install aide >> $AUDITDIR/service_install_$TIME.log
+
+# CIS 1.3.1
+echo "Configuring AIDE..."
+aide --init
+mv /var/lib/aide/aide.db.new.gz /var/lib/aide/aide.db.gz
+# CIS 1.3.2
+echo "0 5 * * * /usr/sbin/aide --check" >> /etc/crontab
+
+echo "Setting GMT Timezone..."
+timedatectl set-timezone Europe/London
 
 # CIS 1.6.1.2
 echo "Enabling SELinux (Targeted)..."
@@ -122,12 +137,12 @@ echo "umask 027" >> /etc/init.d/functions
 echo "Upgrading password hashing algorithm to SHA512..."
 authconfig --passalgo=sha512 --update
 
-
+# CIS 1.5.1
 echo "Setting core dump security limits..."
-echo '* hard core 0' > /etc/security/limits.conf # CIS 1.5.1
+echo '* hard core 0' > /etc/security/limits.conf
 
-echo "Generating additional rsyslog logs..."
 # CIS 4.2.1.2 - 4.2.1.3  Configure /etc/rsyslog.conf - This is environment specific
+echo "Generating additional rsyslog logs..."
 echo 'auth,user.* /var/log/user' >> /etc/rsyslog.conf
 echo 'kern.* /var/log/kern.log' >> /etc/rsyslog.conf
 echo 'daemon.* /var/log/daemon.log' >> /etc/rsyslog.conf
@@ -138,10 +153,9 @@ chmod og-rwx /var/log/user /var/log/kern.log /var/log/daemon.log /var/log/syslog
 chown root:root /var/log/user /var/log/kern.log /var/log/daemon.log /var/log/syslog /var/log/unused.log
 
 # CIS 4.2.1.4 - 4.2.1.5  Configure rsyslog to Send Log to a Remote Log Host - This is environment specific
+# CIS 4.1.1.1 Configure Audit Log Storage Size
 echo "Configuring Audit Log Storage Size..."
 cp -a ${auditd_conf} ${auditd_conf}.bak
-
-# CIS 4.1.1.1 Configure Audit Log Storage Size
 sed -i 's/^max_log_file .*$/max_log_file = 2048/' ${auditd_conf}
 
 # CIS 4.1.1.2 Disable system on Audit Log Full - This is VERY environment specific (and likely controversial)
@@ -160,7 +174,7 @@ systemctl enable auditd
 echo "Setting audit rules..."
 cat > /etc/audit/audit.rules << "EOF"
 -D
--b 320
+-b 8192
 
 -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change
 -a always,exit -F arch=b32 -S adjtimex -S settimeofday -S stime -k time-change
@@ -410,17 +424,21 @@ sed -i s/'^GRUB_CMDLINE_LINUX="'/'GRUB_CMDLINE_LINUX="audit=1 selinux=1 enforcin
 grub2-mkconfig -o ${grub_cfg}
 
 echo "Verifying System File Permissions..."			
-chmod 600 /boot/grub2/grub.cfg # CIS 1.4.1
+chmod og-rwx /boot/grub2/grub.cfg # CIS 1.4.1
+chmod og-rwx /boot/grub2/user.cfg # CIS 1.4.1
 chmod 600 /etc/rsyslog.conf
 chmod 644 /etc/passwd # CIS 6.1.2
 chmod 000 /etc/shadow # CIS 6.1.3
 chmod 000 /etc/gshadow # CIS 6.1.5
 chmod 644 /etc/group  # CIS 6.1.4
 chown root:root /boot/grub2/grub.cfg	# CIS 1.4.1
+chown root:root /boot/grub2/user.cfg	# CIS 1.4.1
 chown root:root /etc/passwd # CIS 6.1.2
 chown root:root /etc/shadow # CIS 6.1.3
 chown root:root /etc/gshadow # CIS 6.1.5
 chown root:root /etc/group  # CIS 6.1.4
+
+chwon 
 
 # CIS 1.1.21 
 echo "Setting Sticky Bit on All World-Writable Directories..."
@@ -711,8 +729,8 @@ echo "Modifying Network Parameters..."
 cp /etc/sysctl.conf $AUDITDIR/sysctl.conf_$TIME.bak
 cat > /etc/sysctl.conf << 'EOF'
 fs.suid_dumpable = 0					# CIS 1.5.1
-kernel.randomize_va_space = 2				# CIS 1.5.3
-kernel.kptr_restrict = 2
+kernel.randomize_va_space = 2			# CIS 1.5.3
+kernel.kptr_restrict = 2				# Custom
 kernel.sysrq = 0						# Custom
 kernel.dmesg_restrict = 1				# Custom
 net.ipv4.ip_forward = 0					# CIS 3.1.1
@@ -733,8 +751,8 @@ net.ipv4.conf.default.rp_filter = 1			# CIS 3.2.7
 net.ipv4.tcp_syncookies = 1				# CIS 3.2.8
 net.ipv6.conf.all.accept_ra = 0				# CIS 3.3.1
 net.ipv6.conf.default.accept_ra = 0 			# CIS 3.3.1
-net.ipv6.conf.all.accept_redirect = 0			# CIS 3.3.2
-net.ipv6.conf.default.accept_redirect = 0		# CIS 3.3.2
+net.ipv6.conf.all.accept_redirects = 0			# CIS 3.3.2
+net.ipv6.conf.default.accept_redirects = 0		# CIS 3.3.2
 net.ipv6.conf.all.disable_ipv6 = 1			# CIS 3.3.3
 EOF
 
@@ -750,6 +768,7 @@ chown root:root /etc/hosts.deny				# CIS 3.4.5
 chmod 644 /etc/hosts.deny				# CIS 3.4.5			
 
 echo "Configuring hosts.allow..." 
+/bin/rm -f /etc/hosts.allow
 echo "ALL: 127.0.0.1" > /etc/hosts.allow
 echo "sshd: ALL" >> /etc/hosts.allow
 
@@ -761,9 +780,8 @@ systemctl mask ctrl-alt-del.target
 
 # CIS 1.4.3
 echo "Verify single user mode authentication..."
-grep /sbin/sulogin /usr/lib/systemd/system/rescue.service 'ExecStart=-/bin/sh -c "/sbin/sulogin; /usr/bin/systemctl --fail --no-block default"' >> $AUDITDIR/single_user_mode_$TIME.log
-grep /sbin/sulogin /usr/lib/systemd/system/emergency.service 'ExecStart=-/bin/sh -c "/sbin/sulogin; /usr/bin/systemctl --fail --no-block default"' >> $AUDITDIR/single_user_mode_$TIME.log
-echo "If not configured.. enable password protection..."
+grep /sbin/sulogin /usr/lib/systemd/system/rescue.service  >> $AUDITDIR/single_user_mode_$TIME.log
+grep /sbin/sulogin /usr/lib/systemd/system/emergency.service >> $AUDITDIR/single_user_mode_$TIME.log
 
 # CIS 5.6
 echo "Restricting Access to the su Command..."
