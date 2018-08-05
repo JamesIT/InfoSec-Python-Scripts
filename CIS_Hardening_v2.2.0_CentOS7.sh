@@ -1,5 +1,5 @@
 #!/bin/bash
-# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.3).
+# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.2).
 # Copyright (c) 2015, Ross Hamilton. All rights reserved.
 # Licenced under the BSD Licence See LICENCE file for details
 
@@ -145,7 +145,7 @@ echo "Configuring Audit Log Storage Size..."
 cp -a ${auditd_conf} ${auditd_conf}.bak
 
 # CIS 4.1.1.1 Configure Audit Log Storage Size
-sed -i 's/^max_log_file .*$/max_log_file = 1024/' ${auditd_conf}
+sed -i 's/^max_log_file .*$/max_log_file = 2048/' ${auditd_conf}
 
 # CIS 4.1.1.2 Disable system on Audit Log Full - This is VERY environment specific (and likely controversial)
 sed -i 's/^space_left_action.*$/space_left_action = SYSLOG/' ${auditd_conf}
@@ -252,7 +252,7 @@ cat > /etc/audit/audit.rules << "EOF"
 -e 2
 EOF
 
-echo "Configuration boot.log log rotation..."
+echo "Configuring boot.log log rotation..."
 sed -i "1 i /var/log/boot.log" /etc/logrotate.d/syslog 			# CIS 4.3
 
 echo "Configuring Cron and Anacron..."
