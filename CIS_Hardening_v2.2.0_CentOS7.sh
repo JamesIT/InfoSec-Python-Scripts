@@ -449,7 +449,7 @@ df --local -P | awk {'if (NR!=1) print $6'} | xargs -I '{}' find '{}' -xdev -typ
 echo "Searching for Un-owned files and directories..."
 df --local -P | awk {'if (NR!=1) print $6'} | xargs -I '{}' find '{}' -xdev -nouser -ls >> $AUDITDIR/unowned_files_$TIME.log
 
-#34: Find Un-grouped Files and Directories
+# Find Un-grouped Files and Directories
 echo "Searching for Un-grouped files and directories..."
 df --local -P | awk {'if (NR!=1) print $6'} | xargs -I '{}' find '{}' -xdev -nogroup -ls >> $AUDITDIR/ungrouped_files_$TIME.log
 
