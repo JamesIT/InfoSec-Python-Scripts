@@ -1,5 +1,5 @@
 #!/bin/bash
-# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 - Updated/Modified by James Hemmings (Local Script Version V1).
+# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.2).
 # Copyright (c) 2015, Ross Hamilton. All rights reserved.
 # Licenced under the BSD Licence See LICENCE file for details
 
@@ -22,7 +22,7 @@ echo "Checking RPM GPG Key Status..."
 rpm -q gpg-pubkey --qf '%{name}-%{version}-%{release} --> %{summary}\n' >> $AUDITDIR/rpm_gpgkeys_status_$TIME.log
 
 # Disable mounting of unneeded filesystems CIS 1.1.1 and CIS 3.5
-echo "Disabling Legacy Filesystems + Network Protocols"
+echo "Disabling Legacy Filesystems + Network Protocols..."
 cat > /etc/modprobe.d/CIS.conf << "EOF"
 install cramfs /bin/true
 install freevxfs /bin/true
@@ -35,6 +35,18 @@ install dccp /bin/true
 install sctp /bin/true
 install rds /bin/true
 install tipc /bin/true
+install bnep /bin/true
+install bluetooth /bin/true
+install btusb /bin/true
+install net-pf-31 /bin/true
+install appletalk /bin/true
+# !!Enviroment Specific!! Caution!!
+#install cifs /bin/true
+#install nfs /bin/true
+#install nfsv3 /bin/true
+#install nfsv4 /bin/true
+#install gfs2 /bin/true
+blacklist firewire-core
 EOF
 
 # CIS 1.1.22
@@ -79,6 +91,9 @@ chkconfig time-stream off >> $AUDITDIR/time_disable_status_$TIME.log
 # CIS 2.2.1.1
 echo "Installing NTP..."
 yum -y install ntp >> $AUDITDIR/service_install_$TIME.log
+
+echo "Setting GMT Timezone..."
+timedatectl set-timezone Europe/London
 
 # 3.6.1 
 echo "Installing iptables..." 
@@ -161,6 +176,7 @@ cat > /etc/audit/audit.rules << "EOF"
 -w /etc/sysconfig/network -p wa -k system-locale
 
 -w /etc/selinux/ -p wa -k MAC-policy
+-w /usr/share/selinux/ -p wa -k MAC-policy
 
 -w /var/log/faillog -p wa -k logins
 -w /var/log/lastlog -p wa -k logins
@@ -319,7 +335,7 @@ systemctl restart sshd >> $AUDITDIR/service_restart_$TIME.log
 # CIS 5.3.1
 echo "Setting Password Policy..."
 pwqual='/etc/security/pwquality.conf'
-sed -i 's/^# minlen =.*$/minlen = 14/' ${pwqual}
+sed -i 's/^# minlen =.*$/minlen = 12/' ${pwqual}
 sed -i 's/^# dcredit =.*$/dcredit = -1/' ${pwqual}
 sed -i 's/^# ucredit =.*$/ucredit = -1/' ${pwqual}
 sed -i 's/^# ocredit =.*$/ocredit = -1/' ${pwqual}
@@ -354,6 +370,7 @@ echo "Setting password expiration..."
 login_defs=/etc/login.defs
 sed -i 's/^PASS_MAX_DAYS.*$/PASS_MAX_DAYS 0/' ${login_defs} # CIS 5.4.1.1 - Custom per NCSC guidelines.
 sed -i 's/^PASS_MIN_DAYS.*$/PASS_MIN_DAYS 7/' ${login_defs} # CIS 5.4.1.2
+sed -i 's/^PASS_MIN_LEN.*$/PASS_MIN_LEN 12/' ${login_defs} # Custom per NCSC guidelines.
 sed -i 's/^PASS_WARN_AGE.*$/PASS_WARN_AGE 7/' ${login_defs} # CIS 5.4.1.3
 
 # CIS 5.5
@@ -373,28 +390,30 @@ line_num=$(grep -n "^[[:space:]]*umask" /etc/profile | head -1 | cut -d: -f1)
 sed -i ${line_num}s/002/027/ /etc/profile
 
 echo "Locking inactive user accounts..."
+# Locks 30 days after expiry.
 useradd -D -f 30
 
+# CIS 1.1.3, 1.1.4, 1.1.5, 1.1.8, 1.1.9, 1.1.10
 echo "Securing /TMP... (/etc/fstab)..."
 cat << EOF >> /etc/fstab
-/tmp      /var/tmp    none    bind    0 0
-none	/dev/shm	tmpfs	nosuid,nodev,noexec	0 0
+/tmp      /var/tmp    none    rw,nosuid,nodev,noexec,bind    0 0
+none	/dev/shm	tmpfs	rw,nosuid,nodev,noexec	0 0
 EOF
 
-# CIS 4.1.3 
+# CIS 4.1.3, 1.6.1.1
 echo "Enabling auditd GRUB startup..."
-sed -i s/'^GRUB_CMDLINE_LINUX="'/'GRUB_CMDLINE_LINUX="audit=1 '/ /etc/default/grub 
+sed -i s/'^GRUB_CMDLINE_LINUX="'/'GRUB_CMDLINE_LINUX="audit=1 selinux=1 enforcing=1 '/ /etc/default/grub 
 grub_cfg='/boot/grub2/grub.cfg'
 grub2-mkconfig -o ${grub_cfg}
 
 echo "Verifying System File Permissions..."			
-chmod 600 /boot/grub2/grub.cf # CIS 1.4.1
+chmod 600 /boot/grub2/grub.cfg # CIS 1.4.1
 chmod 600 /etc/rsyslog.conf
 chmod 644 /etc/passwd # CIS 6.1.2
 chmod 000 /etc/shadow # CIS 6.1.3
 chmod 000 /etc/gshadow # CIS 6.1.5
 chmod 644 /etc/group  # CIS 6.1.4
-chown root:root /boot/grub2/grub.cf	# CIS 1.4.1
+chown root:root /boot/grub2/grub.cfg	# CIS 1.4.1
 chown root:root /etc/passwd # CIS 6.1.2
 chown root:root /etc/shadow # CIS 6.1.3
 chown root:root /etc/gshadow # CIS 6.1.5
@@ -402,7 +421,7 @@ chown root:root /etc/group  # CIS 6.1.4
 
 # CIS 1.1.21 
 echo "Setting Sticky Bit on All World-Writable Directories..."
-df --local -P | awk {'if (NR!=1) print $6'} | xargs -I '{}' find '{}' -xdev -type d \( -perm -0002 -a ! -perm -1000 \) 2>/dev/null | xargs chmod a+t >> $AUDITDIR/sticky_on_world_$TIME.log
+df --local -P | awk {'if (NR!=1) print $6'} | xargs -I '{}' find '{}' -xdev -type d -perm -0002 2>/dev/null | xargs chmod a+t  >> $AUDITDIR/sticky_on_world_$TIME.log
 
 echo "Searching for world writable files..."
 df --local -P | awk {'if (NR!=1) print $6'} | xargs -I '{}' find '{}' -xdev -type f -perm -0002 >> $AUDITDIR/world_writable_files_$TIME.log
@@ -690,6 +709,9 @@ cp /etc/sysctl.conf $AUDITDIR/sysctl.conf_$TIME.bak
 cat > /etc/sysctl.conf << 'EOF'
 fs.suid_dumpable = 0					# CIS 1.5.1
 kernel.randomize_va_space = 2				# CIS 1.5.3
+kernel.kptr_restrict = 2
+kernel.sysrq = 0						# Custom
+kernel.dmesg_restrict = 1				# Custom
 net.ipv4.ip_forward = 0					# CIS 3.1.1
 net.ipv4.conf.all.send_redirects = 0			# CIS 3.1.2
 net.ipv4.conf.default.send_redirects = 0		# CIS 3.1.2
@@ -724,13 +746,20 @@ echo "ALL: ALL" >> /etc/hosts.deny			# CIS 3.4.3
 chown root:root /etc/hosts.deny				# CIS 3.4.5
 chmod 644 /etc/hosts.deny				# CIS 3.4.5			
 
+echo "Configuring hosts.allow..." 
+echo "ALL: 127.0.0.1" > /etc/hosts.allow
+echo "sshd: ALL" >> /etc/hosts.allow
+
 echo "Configuring systemd run level 3... (Disable GUIs)"
 systemctl set-default multi-user.target
 
+echo "Preventing CTRL+ALT+DEL Console Reboot..."
+systemctl mask ctrl-alt-del.target
+
 # CIS 1.4.3
 echo "Verify single user mode authentication..."
-grep /sbin/sulogin /usr/lib/systemd/system/rescue.service ExecStart=-/bin/sh -c "/sbin/sulogin; /usr/bin/systemctl --fail --no-block default" >> $AUDITDIR/single_user_mode_$TIME.log
-grep /sbin/sulogin /usr/lib/systemd/system/emergency.service ExecStart=-/bin/sh -c "/sbin/sulogin; /usr/bin/systemctl --fail --no-block default" >> $AUDITDIR/single_user_mode_$TIME.log
+grep /sbin/sulogin /usr/lib/systemd/system/rescue.service 'ExecStart=-/bin/sh -c "/sbin/sulogin; /usr/bin/systemctl --fail --no-block default"' >> $AUDITDIR/single_user_mode_$TIME.log
+grep /sbin/sulogin /usr/lib/systemd/system/emergency.service 'ExecStart=-/bin/sh -c "/sbin/sulogin; /usr/bin/systemctl --fail --no-block default"' >> $AUDITDIR/single_user_mode_$TIME.log
 echo "If not configured.. enable password protection..."
 
 # CIS 5.6
