@@ -245,10 +245,6 @@ cat > /etc/audit/audit.rules << "EOF"
 -w /etc/fstab
 -w /etc/exports
 
-# Watch xinetd configuration
--w /etc/xinetd.conf
--w /etc/xinetd.d/
-
 # Watch TCP_WRAPPERS configuration
 -w /etc/hosts.allow
 -w /etc/hosts.deny
