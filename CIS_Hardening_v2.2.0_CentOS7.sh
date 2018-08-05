@@ -1,5 +1,5 @@
 #!/bin/bash
-# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.4).
+# CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition) - Updated/Modified by James Hemmings (Local Script Version V1.3).
 # Copyright (c) 2015, Ross Hamilton. All rights reserved.
 # Licenced under the BSD Licence See LICENCE file for details
 
@@ -18,7 +18,7 @@ mkdir -p $AUDITDIR
 echo ""
 echo ""
 echo "CIS CentOS Linux 7 Benchmark v2.2.0 L1/L2 (Server Edition)."
-echo "Updated/Modified by James Hemmings (Local Script Version V1.4)."
+echo "Updated/Modified by James Hemmings (Local Script Version V1.3)."
 read -n 1 -s -r -p "Press any key to continue"
 echo ""
 echo ""
@@ -28,10 +28,8 @@ echo "Listing package update repo's..."
 yum repolist >> $AUDITDIR/yum_repolist_$TIME.log
 
 # CIS 1.2.2
-echo "Checking gpgcheck global status..."
-grep ^gpgcheck /etc/yum.conf >> $AUDITDIR/yum_gpgcheck_$TIME.log
-grep ^gpgcheck /etc/yum.repos.d/* >> $AUDITDIR/yum_gpgcheck_$TIME.log
-echo "If gpgcheck = 0, modify  to gpgcheck=1..."
+echo "Enable YUM GPGCheck..."
+sed -i 's/gpgcheck=0/gpgcheck=1/g' /etc/yum.conf
 
 echo "Checking RPM GPG Key Status..."
 rpm -q gpg-pubkey --qf '%{name}-%{version}-%{release} --> %{summary}\n' >> $AUDITDIR/rpm_gpgkeys_status_$TIME.log
