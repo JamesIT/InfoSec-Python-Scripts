@@ -783,7 +783,10 @@ usermod -G wheel root
 
 # Set bootloader password - User Interaction Required.
 # CIS 1.5.3
+echo "Please enter GRUB2 Bootloader Configuration Password..."
+echo "** NOTE **: Do NOT Lose this or you cannot modify GRUB configuration."
 grub2-setpassword
+grub2-mkconfig -o /boot/grub2/grub.cfg
 
 echo ""
 echo "Successfully Completed"
