@@ -13,9 +13,6 @@ grub_cfg='/boot/grub2/grub.cfg'
 pwqual='/etc/security/pwquality.conf'
 pam_su='/etc/pam.d/su'
 
-# Custom Options
-
-
 mkdir -p $AUDITDIR
 
 # CIS 1.2.1
