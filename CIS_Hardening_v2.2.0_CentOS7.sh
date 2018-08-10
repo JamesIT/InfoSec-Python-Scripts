@@ -182,83 +182,129 @@ systemctl enable auditd
 echo "Setting audit rules..."
 cat > /etc/audit/audit.rules << "EOF"
 
-# Remove any existing rules
+## Remove any existing rules
 -D
 
-# Increase kernel buffer size
+## Increase kernel buffer size
 -b 8192
 
-# Failure of auditd causes a kernel panic
+## Failure of auditd causes a kernel panic
 ## Possible values: 0 (silent), 1 (printk, print a failure message), 2 (panic, halt the system)
 -f 2
 
-# Watch syslog configuration
--w /etc/syslog.conf
+## Self Auditing ---------------------------------------------------------------
+## Audit the audit logs
+### Successful and unsuccessful attempts to read information from the audit records
+-w /var/log/audit/ -k auditlog
 
-# Watch PAM and authentication configuration
--w /etc/pam.d/
--w /etc/nsswitch.conf
+## Auditd configuration
+### Modifications to audit configuration that occur while the audit collection functions are operating
+-w /etc/audit/ -p wa -k auditconfig
+-w /etc/libaudit.conf -p wa -k auditconfig
+-w /etc/audisp/ -p wa -k audispconfig
 
-# Watch system log files
--w /var/log/messages
--w /var/log/audit/audit.log
--w /var/log/audit/audit[1-4].log
+## Monitor for use of audit management tools
+-w /sbin/auditctl -p x -k audittools
+-w /sbin/auditd -p x -k audittools
 
-# Watch audit configuration files
--w /etc/audit/auditd.conf -p wa
--w /etc/audit/audit.rules -p wa
+# Filters ---------------------------------------------------------------------
 
-# Watch login configuration
--w /etc/login.defs
--w /etc/securetty
--w /etc/resolv.conf
+## Ignore SELinux AVC records
+-a always,exclude -F msgtype=AVC
 
-# Watch cron and at
--w /etc/at.allow
--w /etc/at.deny
--w /var/spool/at/
--w /etc/crontab
--w /etc/anacrontab
--w /etc/cron.allow
--w /etc/cron.deny
--w /etc/cron.d/
--w /etc/cron.hourly/
--w /etc/cron.weekly/
--w /etc/cron.monthly/
+## Ignore current working directory records
+-a always,exclude -F msgtype=CWD
 
-# Watch shell configuration
--w /etc/profile.d/
--w /etc/profile
--w /etc/shells
--w /etc/bashrc
--w /etc/csh.cshrc
--w /etc/csh.login
+## Ignore EOE records (End Of Event, not needed)
+-a always,exclude -F msgtype=EOE
 
-# Watch kernel configuration
--w /etc/sysctl.conf
--w /etc/modprobe.conf
+## Cron jobs fill the logs with stuff we normally don't want (works with SELinux)
+-a never,user -F subj_type=crond_t
+-a exit,never -F subj_type=crond_t
 
-# Watch linked libraries
--w /etc/ld.so.conf -p wa
--w /etc/ld.so.conf.d/ -p wa
+## This prevents chrony from overwhelming the logs
+-a never,exit -F arch=b64 -S adjtimex -F auid=unset -F uid=chrony -F subj_type=chronyd_t
 
-# Watch init configuration
--w /etc/rc.d/init.d/
--w /etc/sysconfig/
--w /etc/inittab -p wa
--w /etc/rc.local
--w /etc/rc.sysinit
+## This is not very interesting and wastes a lot of space if the server is public facing
+-a always,exclude -F msgtype=CRYPTO_KEY_USER
 
-# Watch filesystem and NFS exports
--w /etc/fstab
--w /etc/exports
+## VMWare tools
+-a exit,never -F arch=b32 -S fork -F success=0 -F path=/usr/lib/vmware-tools -F subj_type=initrc_t -F exit=-2
+-a exit,never -F arch=b64 -S fork -F success=0 -F path=/usr/lib/vmware-tools -F subj_type=initrc_t -F exit=-2
 
-# Watch TCP_WRAPPERS configuration
--w /etc/hosts.allow
--w /etc/hosts.deny
+### High Volume Event Filter (especially on Linux Workstations)
+-a exit,never -F arch=b32 -F dir=/dev/shm -k sharedmemaccess
+-a exit,never -F arch=b64 -F dir=/dev/shm -k sharedmemaccess
+-a exit,never -F arch=b32 -F dir=/var/lock/lvm -k locklvm
+-a exit,never -F arch=b64 -F dir=/var/lock/lvm -k locklvm
 
-# Watch sshd configuration
--w /etc/ssh/sshd_config
+# Rules -----------------------------------------------------------------------
+
+# Kernel parameters
+-w /etc/sysctl.conf -p wa -k sysctl
+
+## Modprobe configuration
+-w /etc/modprobe.conf -p wa -k modprobe
+
+## Stunnel
+-w /usr/sbin/stunnel -p x -k stunnel
+
+## Cron configuration & scheduled jobs
+-w /etc/cron.allow -p wa -k cron
+-w /etc/cron.deny -p wa -k cron
+-w /etc/cron.d/ -p wa -k cron
+-w /etc/cron.daily/ -p wa -k cron
+-w /etc/cron.hourly/ -p wa -k cron
+-w /etc/cron.monthly/ -p wa -k cron
+-w /etc/cron.weekly/ -p wa -k cron
+-w /etc/crontab -p wa -k cron
+-w /var/spool/cron/crontabs/ -k cron
+
+## Passwd
+-w /usr/bin/passwd -p x -k passwd_modification
+
+## Tools to change group identifiers
+-w /usr/sbin/groupadd -p x -k group_modification
+-w /usr/sbin/groupmod -p x -k group_modification
+-w /usr/sbin/addgroup -p x -k group_modification
+-w /usr/sbin/useradd -p x -k user_modification
+-w /usr/sbin/usermod -p x -k user_modification
+-w /usr/sbin/adduser -p x -k user_modification
+
+## System startup scripts
+-w /etc/inittab -p wa -k init
+-w /etc/init.d/ -p wa -k init
+-w /etc/init/ -p wa -k init
+
+## Library search paths
+-w /etc/ld.so.conf -p wa -k libpath
+
+## Pam configuration
+-w /etc/pam.d/ -p wa -k pam
+-w /etc/security/limits.conf -p wa  -k pam
+-w /etc/security/pam_env.conf -p wa -k pam
+-w /etc/security/namespace.conf -p wa -k pam
+-w /etc/security/namespace.init -p wa -k pam
+
+## SSH configuration
+-w /etc/ssh/sshd_config -k sshd
+
+# Systemd
+-w /bin/systemctl -p x -k systemd 
+-w /etc/systemd/ -p wa -k systemd
+
+## Monitor usage of commands to change power state
+-w /sbin/shutdown -p x -k power
+-w /sbin/poweroff -p x -k power
+-w /sbin/reboot -p x -k power
+-w /sbin/halt -p x -k power
+
+## Process ID change (switching accounts) applications
+-w /bin/su -p x -k priv_esc
+-w /usr/bin/sudo -p x -k priv_esc
+-w /etc/sudoers -p rw -k priv_esc
+
+# CIS Benchmark Rules -----------------------------------------------------------------------
 
 # CIS 4.1.4 Ensure events that modify date and time information are collected
 -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change
@@ -358,6 +404,59 @@ cat > /etc/audit/audit.rules << "EOF"
 -a always,exit -F path=/usr/lib64/dbus-1/dbus-daemon-launch-helper -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
 -a always,exit -F path=/usr/libexec/utempter/utempter -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
 -a always,exit -F path=/usr/libexec/openssh/ssh-keysign -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
+
+# Special Rules ---------------------------------------------------------------
+
+## 32bit API Exploitation
+### If you are on a 64 bit platform, everything _should_ be running
+### in 64 bit mode. This rule will detect any use of the 32 bit syscalls
+### because this might be a sign of someone exploiting a hole in the 32
+### bit API.
+-a always,exit -F arch=b32 -S all -k 32bit_api
+
+## Reconnaissance
+-w /usr/bin/whoami -p x -k recon
+-w /etc/issue -p r -k recon
+-w /etc/hostname -p r -k recon
+
+## Suspicious activity
+-w /usr/bin/wget -p x -k susp_activity
+-w /usr/bin/curl -p x -k susp_activity
+-w /usr/bin/base64 -p x -k susp_activity
+-w /bin/nc -p x -k susp_activity
+-w /bin/netcat -p x -k susp_activity
+-w /usr/bin/ncat -p x -k susp_activity
+-w /usr/bin/ssh -p x -k susp_activity
+-w /usr/bin/socat -p x -k susp_activity
+-w /usr/bin/wireshark -p x -k susp_activity
+-w /usr/bin/rawshark -p x -k susp_activity
+-w /usr/bin/rdesktop -p x -k sbin_susp
+
+## Sbin suspicious activity
+-w /sbin/iptables -p x -k sbin_susp 
+-w /sbin/ifconfig -p x -k sbin_susp
+-w /usr/sbin/tcpdump -p x -k sbin_susp
+-w /usr/sbin/traceroute -p x -k sbin_susp
+
+## Injection 
+### These rules watch for code injection by the ptrace facility.
+### This could indicate someone trying to do something bad or just debugging
+-a always,exit -F arch=b32 -S ptrace -k tracing
+-a always,exit -F arch=b64 -S ptrace -k tracing
+-a always,exit -F arch=b32 -S ptrace -F a0=0x4 -k code_injection
+-a always,exit -F arch=b64 -S ptrace -F a0=0x4 -k code_injection
+-a always,exit -F arch=b32 -S ptrace -F a0=0x5 -k data_injection
+-a always,exit -F arch=b64 -S ptrace -F a0=0x5 -k data_injection
+-a always,exit -F arch=b32 -S ptrace -F a0=0x6 -k register_injection
+-a always,exit -F arch=b64 -S ptrace -F a0=0x6 -k register_injection
+
+## Privilege Abuse
+### The purpose of this rule is to detect when an admin may be abusing power by looking in user's home dir.
+-a always,exit -F dir=/home -F uid=0 -F auid>=1000 -F auid!=4294967295 -C auid!=obj_uid -k power_abuse
+
+# RPM (Redhat/CentOS)
+-w /usr/bin/rpm -p x -k software_mgmt
+-w /usr/bin/yum -p x -k software_mgmt
 
 # CIS 4.1.18 Ensure the audit configuration is immutable (Scored)
 -e 2
