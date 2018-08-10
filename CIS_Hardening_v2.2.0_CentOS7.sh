@@ -12,6 +12,8 @@ sshd_config='/etc/ssh/sshd_config'
 grub_cfg='/boot/grub2/grub.cfg'
 pwqual='/etc/security/pwquality.conf'
 pam_su='/etc/pam.d/su'
+rsyslog_conf='/etc/rsyslog.conf'
+
 # Create Audit Directory
 mkdir -p $AUDITDIR
 
@@ -22,6 +24,7 @@ echo "Updated/Modified by James Hemmings (Local Script Version V1.3)."
 echo ""
 echo ""
 read -n 1 -s -r -p "Press any key to continue"
+echo ""
 echo ""
 echo ""
 
@@ -153,6 +156,10 @@ touch /var/log/user /var/log/kern.log /var/log/daemon.log /var/log/syslog /var/l
 chmod og-rwx /var/log/user /var/log/kern.log /var/log/daemon.log /var/log/syslog /var/log/unused.log
 chown root:root /var/log/user /var/log/kern.log /var/log/daemon.log /var/log/syslog /var/log/unused.log
 
+# CIS 4.2.1.3 Ensure rsyslog default file permissions configured (Scored)
+echo "Configuring rsyslog default file permissions..."
+sed -i 's/^$FileCreateMode .*$/$FileCreateMode = 0640/' ${rsyslog_conf}
+
 # CIS 4.2.1.4 - 4.2.1.5  Configure rsyslog to Send Log to a Remote Log Host - This is environment specific
 # CIS 4.1.1.1 Configure Audit Log Storage Size
 echo "Configuring Audit Log Storage Size..."
@@ -162,7 +169,7 @@ sed -i 's/^max_log_file .*$/max_log_file = 2048/' ${auditd_conf}
 # CIS 4.1.1.2 Disable system on Audit Log Full - This is VERY environment specific (and likely controversial)
 sed -i 's/^space_left_action.*$/space_left_action = SYSLOG/' ${auditd_conf}
 sed -i 's/^action_mail_acct.*$/action_mail_acct = root/' ${auditd_conf}
-sed -i 's/^admin_space_left_action.*$/admin_space_left_action = SYSLOG/' ${auditd_conf}
+sed -i 's/^admin_space_left_action.*$/admin_space_left_action = halt/' ${auditd_conf}
 
 # CIS 4.1.1.3 Keep All Auditing Information
 sed -i 's/^max_log_file_action.*$/max_log_file_action = keep_logs/' ${auditd_conf}
@@ -182,6 +189,7 @@ cat > /etc/audit/audit.rules << "EOF"
 -b 8192
 
 # Failure of auditd causes a kernel panic
+## Possible values: 0 (silent), 1 (printk, print a failure message), 2 (panic, halt the system)
 -f 2
 
 # Watch syslog configuration
@@ -252,36 +260,44 @@ cat > /etc/audit/audit.rules << "EOF"
 # Watch sshd configuration
 -w /etc/ssh/sshd_config
 
+# CIS 4.1.4 Ensure events that modify date and time information are collected
 -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change
 -a always,exit -F arch=b32 -S adjtimex -S settimeofday -S stime -k time-change
 -a always,exit -F arch=b64 -S clock_settime -k time-change
 -a always,exit -F arch=b32 -S clock_settime -k time-change
 -w /etc/localtime -p wa -k time-change
 
+# CIS 4.1.5 Ensure events that modify user/group information are collected
 -w /etc/group -p wa -k identity
 -w /etc/passwd -p wa -k identity
 -w /etc/gshadow -p wa -k identity
 -w /etc/shadow -p wa -k identity
 -w /etc/security/opasswd -p wa -k identity
 
+# CIS 4.1.6 Ensure events that modify the system's network environment are collected
 -a always,exit -F arch=b64 -S sethostname -S setdomainname -k system-locale
 -a always,exit -F arch=b32 -S sethostname -S setdomainname -k system-locale
 -w /etc/issue -p wa -k system-locale
 -w /etc/issue.net -p wa -k system-locale
 -w /etc/hosts -p wa -k system-locale
 -w /etc/sysconfig/network -p wa -k system-locale
+-w /etc/sysconfig/network-scripts/ -p wa -k system-locale
 
+# CIS 4.1.7 Ensure events that modify the system's Mandatory Access Controls are collected
 -w /etc/selinux/ -p wa -k MAC-policy
 -w /usr/share/selinux/ -p wa -k MAC-policy
 
+# CIS 4.1.8 Ensure login and logout events are collected
 -w /var/log/faillog -p wa -k logins
 -w /var/log/lastlog -p wa -k logins
 -w /var/log/tallylog -p wa -k logins
 
+# CIS 4.1.9 Ensure session initiation information is collected
 -w /var/run/utmp -p wa -k session
 -w /var/log/wtmp -p wa -k session
 -w /var/log/btmp -p wa -k session
 
+# CIS 4.1.10 Ensure discretionary access control permission modification events are collected
 -a always,exit -F arch=b64 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=4294967295 -k perm_mod
 -a always,exit -F arch=b32 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=4294967295 -k perm_mod
 -a always,exit -F arch=b64 -S chown -S fchown -S fchownat -S lchown -F auid>=1000 -F auid!=4294967295 -k perm_mod
@@ -289,27 +305,34 @@ cat > /etc/audit/audit.rules << "EOF"
 -a always,exit -F arch=b64 -S setxattr -S lsetxattr -S fsetxattr -S removexattr -S lremovexattr -S fremovexattr -F auid>=1000 -F auid!=4294967295 -k perm_mod
 -a always,exit -F arch=b32 -S setxattr -S lsetxattr -S fsetxattr -S removexattr -S lremovexattr -S fremovexattr -F auid>=1000 -F auid!=4294967295 -k perm_mod
 
+# CIS 4.1.11 Ensure unsuccessful unauthorized file access attempts are collected
 -a always,exit -F arch=b64 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k access
 -a always,exit -F arch=b32 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k access
 -a always,exit -F arch=b64 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=4294967295 -k access
 -a always,exit -F arch=b32 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=4294967295 -k access
 
+# CIS 4.1.13 Ensure successful file system mounts are collected
 -a always,exit -F arch=b64 -S mount -F auid>=1000 -F auid!=4294967295 -k mounts
 -a always,exit -F arch=b32 -S mount -F auid>=1000 -F auid!=4294967295 -k mounts
 
+# CIS 4.1.14 Ensure file deletion events by users are collected
 -a always,exit -F arch=b64 -S unlink -S unlinkat -S rename -S renameat -F auid>=1000 -F auid!=4294967295 -k delete
 -a always,exit -F arch=b32 -S unlink -S unlinkat -S rename -S renameat -F auid>=1000 -F auid!=4294967295 -k delete
 
+# CIS 4.1.15 Ensure changes to system administration scope (sudoers) is collected
 -w /etc/sudoers -p wa -k scope
 -w /etc/sudoers.d -p wa -k scope
 
+# CIS 4.1.16 Ensure system administrator actions (sudolog) are collected
 -w /var/log/sudo.log -p wa -k actions
 
+# CIS 4.1.17 Ensure kernel module loading and unloading is collected (Scored)
 -w /sbin/insmod -p x -k modules
 -w /sbin/rmmod -p x -k modules
 -w /sbin/modprobe -p x -k modules
 -a always,exit -F arch=b64 -S init_module -S delete_module -k modules
 
+# 4.1.12 Ensure use of privileged commands is collected
 -a always,exit -F path=/usr/bin/wall -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
 -a always,exit -F path=/usr/bin/write -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
 -a always,exit -F path=/usr/bin/chage -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
@@ -336,7 +359,7 @@ cat > /etc/audit/audit.rules << "EOF"
 -a always,exit -F path=/usr/libexec/utempter/utempter -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
 -a always,exit -F path=/usr/libexec/openssh/ssh-keysign -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
 
-# Make the auditd Configuration Immutable
+# CIS 4.1.18 Ensure the audit configuration is immutable (Scored)
 -e 2
 EOF
 
@@ -410,7 +433,7 @@ chmod 600 ${sshd_config}						# CIS 5.2.1
 sed -i "s/\#Protocol/Protocol/" ${sshd_config}				# CIS 5.2.2
 sed -i "s/\#LogLevel/LogLevel/" ${sshd_config}				# CIS 5.2.3
 sed -i "s/X11Forwarding yes/X11Forwarding no/" ${sshd_config}		# CIS 5.2.4
-sed -i "s/\#MaxAuthTries 6/MaxAuthTries 3/" ${sshd_config}		# CIS 5.2.5
+sed -i "s/\#MaxAuthTries 6/MaxAuthTries 4/" ${sshd_config}		# CIS 5.2.5
 sed -i "s/\#IgnoreRhosts yes/IgnoreRhosts yes/" ${sshd_config}		# CIS 5.2.6
 sed -i "s/\#HostbasedAuthentication no/HostbasedAuthentication no/" ${sshd_config}	# CIS 5.2.7
 sed -i "s/\#PermitRootLogin yes/PermitRootLogin no/" ${sshd_config}	# CIS 5.2.8
